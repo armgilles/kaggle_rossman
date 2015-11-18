@@ -7,104 +7,117 @@ Created on Wed Nov 18 11:48:04 2015
 
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
 
-def process_data(data):
-	'''
-	Processes data for model
-		INPUT: DataFrame
-		OUTPUT: DataFrame
-	'''
-	# Merge store data
-	data = data.merge(store, on = 'Store', copy = False)
-
-	# Break down date column
-	data['year'] = data.Date.apply(lambda x: x.year)
-	data['month'] = data.Date.apply(lambda x: x.month)
-	#     data['dow'] = data.Date.apply(lambda x: x.dayofweek)
-	data['woy'] = data.Date.apply(lambda x: x.weekofyear)
-	data.drop(['Date'], axis = 1, inplace= True)
-
-	# Calculate time competition open time in months
-	data['CompetitionOpen'] = 12 * (data.year - data.CompetitionOpenSinceYear) + \
-	(data.month - data.CompetitionOpenSinceMonth)
-	data['CompetitionOpen'] = data.CompetitionOpen.apply(lambda x: x if x > 0 else 0)
-	data.drop(['CompetitionOpenSinceMonth', 'CompetitionOpenSinceYear'], axis = 1, 
-	         inplace = True)
-
-	# Promo open time in months
-	data['PromoOpen'] = 12 * (data.year - data.Promo2SinceYear) + \
-	(data.woy - data.Promo2SinceWeek) / float(4)
-	data['PromoOpen'] = data.CompetitionOpen.apply(lambda x: x if x > 0 else 0)
-	data.drop(['Promo2SinceYear', 'Promo2SinceWeek'], axis = 1, 
-	         inplace = True)
-
-	# Get promo months
-	data['p_1'] = data.PromoInterval.apply(lambda x: x[:3] if type(x) == str else 0)
-	data['p_2'] = data.PromoInterval.apply(lambda x: x[4:7] if type(x) == str else 0)
-	data['p_3'] = data.PromoInterval.apply(lambda x: x[8:11] if type(x) == str else 0)
-	data['p_4'] = data.PromoInterval.apply(lambda x: x[12:15] if type(x) == str else 0)
+import sklearn.cross_validation as cv
+import sklearn.feature_extraction as fe
+import sklearn.preprocessing as preprocessing
+import sklearn.ensemble as es
 
 
-	# Get dummies for categoricals
-	data = pd.get_dummies(data, columns = ['p_1', 'p_2', 'p_3', 'p_4', 
-	                                       'StateHoliday' , 
-	                                       'StoreType', 
-	                                       'Assortment'])
-	data.drop(['Store',
-	           'PromoInterval', 
-	           'p_1_0', 'p_2_0', 'p_3_0', 'p_4_0', 
-	           'StateHoliday_0', 
-	           'year'], axis=1,inplace=True)
+
+store = pd.read_csv('input/store.csv')
+train = pd.read_csv('input/train.csv',low_memory=False)
+test = pd.read_csv('input/test.csv')
+
+print("Reading CSV Done.")
 
 
-	# Fill in missing values
-	data = data.fillna(0)
-	data = data.sort_index(axis=1)
+df_train = train.copy()
+df_test = test.copy()
 
-	return data
+print("Assume store open, if not provided")
+df_test.fillna(1, inplace=True)
 
-## Start of main script
+print("Consider only open stores for training. Closed stores wont count into the score.")
+df_train = df_train[df_train["Open"] != 0]
 
-# Load data
-data = pd.read_csv('input/train.csv', parse_dates = ['Date'])
-store = pd.read_csv('input/store.csv') 
-print('training data loaded')
 
-# Only use stores that are open to train
-data = data[data['Open'] != 0]
+df_train = pd.merge(train,store,on='Store')
+df_test = pd.merge(test,store,on='Store')
 
-# Process training data
-data = process_data(data)
-print('training data processed')
 
-# Set up training data
-X_train = data.drop(['Sales', 'Customers'], axis = 1)
-y_train = data.Sales
+#df_train = df_train.sample(100000)
 
-# Fit random forest model
-rf = RandomForestRegressor(n_jobs = -1, n_estimators = 15)
-rf.fit(X_train, y_train)
-print('model fit')
 
-# Load and process test data
-test = pd.read_csv('test.csv', parse_dates = ['Date'])
-test = process_data(test)
+# ## FEATURE ENGINEERIN
 
-# Ensure same columns in test data as training
-for col in data.columns:
-    if col not in test.columns:
-        test[col] = np.zeros(test.shape[0])
-        
-test = test.sort_index(axis=1).set_index('Id')
-print('test data loaded and processed')
 
-# Make predictions
-X_test = test.drop(['Sales', 'Customers'], axis=1).values
-y_test = rf.predict(X_test)
+sale_means = train.groupby('Store').mean().Sales
+sale_means.name = 'Sales_Means'
 
-# Make Submission
-result = pd.DataFrame({'Id': test.index.values, 'Sales': y_test}).set_index('Id')
-result = result.sort_index()
-result.to_csv('submission.csv')
-print('submission created')
+df_train = df_train.join(sale_means,on='Store')
+df_test = df_test.join(sale_means,on='Store')
+
+
+
+
+# ## Transform dataframe to Matrix
+
+y = df_train.Sales.tolist()
+
+df_train_ = df_train.drop(['Date','Sales','Store','Customers'],axis=1).fillna(0)
+
+
+
+train_dic = df_train_.fillna(0).to_dict('records')
+
+
+test_dic = df_test.drop(["Date","Store","Id"],axis=1).fillna(0).to_dict('records')
+
+
+#transfrom dataframe to matrix by dict vectorizer
+dv = fe.DictVectorizer()
+X = dv.fit_transform(train_dic)
+Xo = dv.transform(test_dic)
+
+
+#MIN_MAX SCALER
+maxmin = preprocessing.MinMaxScaler()
+X = maxmin.fit_transform(X.toarray())
+Xo = maxmin.transform(Xo.toarray())
+
+
+Xtrain,Xtest,Ytrain,Ytest = cv.train_test_split(X,y)
+
+
+
+# ###### MODEL SELECTION
+
+clf = es.RandomForestRegressor(n_estimators=25)
+clf.verbose = True
+clf.n_jobs = 8
+clf
+
+
+clf.fit(Xtrain,Ytrain)
+print ("Training Score :" + str(clf.score(Xtrain,Ytrain)))
+print ("Test Score : " + str(clf.score(Xtest,Ytest)) )
+
+
+q = [i for i in zip(dv.feature_names_,clf.feature_importances_) ]
+
+q = pd.DataFrame(q,columns = ['Feature_Names','Importance'],index=dv.feature_names_)
+
+q_chart = q.sort('Importance').plot(kind='barh',layout='Feature_Names')
+
+fig_q = q_chart.get_figure()
+fig_q.savefig('feature_impartance.png')
+
+
+Yresult = clf.predict(Xtest)
+Yresult = np.array(Yresult)
+
+Ytest = np.array(Ytest)
+
+np.abs((Yresult - Ytest)).sum() / len(Yresult)
+
+
+# PREDICTION
+
+
+result = clf.predict(Xo)
+
+
+output = pd.DataFrame(df_test.Id).join(pd.DataFrame(result,columns=['Sales']))
+
+output.to_csv('submission.csv',index=False)
