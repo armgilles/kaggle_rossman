@@ -52,6 +52,7 @@ def build_features(features, data):
     data['month'] = data.Date.dt.month
     data['day'] = data.Date.dt.day
     data['DayOfWeek'] = data.Date.dt.dayofweek
+    return data
 
 
 ## Start of main script
@@ -83,9 +84,18 @@ test = pd.merge(test, store, on='Store')
 features = []
 
 print("augment features")
-build_features(features, train)
-build_features([], test)
+train = build_features(features, train)
+test = build_features([], test)
+
+
+print("adding store's cluster")
+cluster = pd.read_csv('cluster_kmean.csv')
+train = train.merge(cluster, on='Store')
+test = test.merge(cluster, on='Store')
+features.append('cluster')
+
 print(features)
+
 
 print('training data processed')
 
@@ -101,7 +111,7 @@ params = {"objective": "reg:linear",
 num_boost_round = 1700
 
 print("Train a XGBoost model")
-X_train, X_valid = train_test_split(train, test_size=0.012, random_state=10)
+X_train, X_valid = train_test_split(train, test_size=0.15, random_state=10)
 y_train = np.log1p(X_train.Sales)
 y_valid = np.log1p(X_valid.Sales)
 dtrain = xgb.DMatrix(X_train[features], y_train)
@@ -121,7 +131,7 @@ dtest = xgb.DMatrix(test[features])
 test_probs = gbm.predict(dtest)
 # Make Submission
 result = pd.DataFrame({"Id": test["Id"], 'Sales': np.expm1(test_probs)})
-result.to_csv("xgboost_10_submission.csv", index=False)
+result.to_csv("submission_3.csv", index=False)
 
 # XGB feature importances
 # Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection-prediction/xgb-feature-importance-python/code
