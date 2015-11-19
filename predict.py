@@ -89,7 +89,7 @@ test = build_features([], test)
 
 
 print("adding store's cluster")
-cluster = pd.read_csv('cluster_kmean.csv')
+cluster = pd.read_csv('cluster_DBCAN.csv')
 train = train.merge(cluster, on='Store')
 test = test.merge(cluster, on='Store')
 features.append('cluster')
@@ -131,7 +131,7 @@ dtest = xgb.DMatrix(test[features])
 test_probs = gbm.predict(dtest)
 # Make Submission
 result = pd.DataFrame({"Id": test["Id"], 'Sales': np.expm1(test_probs)})
-result.to_csv("submission_4.csv", index=False)
+result.to_csv("submission_5.csv", index=False)
 
 # XGB feature importances
 # Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection-prediction/xgb-feature-importance-python/code

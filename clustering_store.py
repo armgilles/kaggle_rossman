@@ -8,7 +8,8 @@ Created on Thu Nov 19 11:21:11 2015
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 import matplotlib
 matplotlib.use("Agg") #Needed to save figures
@@ -103,16 +104,19 @@ X_pca, pca = clustering(store_enrich_sc, 6)
 #plt.scatter(X_pca[:, 0], X_pca[:, 1], marker="o", alpha=0.4)
 
 
-print "Kmean"
-k_means = KMeans(init='k-means++', n_clusters=6, n_init=10).fit(X_pca)
+print "DBSCAN"
+db = DBSCAN(eps=0.9, min_samples=10, metric='euclidean').fit(X_pca)
 
-k_means_labels = k_means.labels_
-k_means_cluster_centers = k_means.cluster_centers_
-k_means_labels_unique = np.unique(k_means_labels)
+core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+core_samples_mask[db.core_sample_indices_] = True
+labels = db.labels_
+unique_labels = set(labels)
+# Number of clusters in labels, ignoring noise if present.
+n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
 
 data = pd.DataFrame({'pca_1' : X_pca[:,0],
                      'pca_2' : X_pca[:,1],
-                     'cluster' : pd.Series(k_means_labels),
+                     'cluster' : pd.Series(labels),
                      'Store' : pd.Series(store_enrich.Store)})
                      
 
@@ -138,19 +142,38 @@ color = [col for col in dico_color.values()]
 
 data.color = data.cluster.map(dico_color)
 
-for k, col in zip(range(k_means_labels_unique.argmax() + 1), color):
-    my_members = k_means_labels == k
-    cluster_center = k_means_cluster_centers[k]
-    plt.scatter(data.pca_1, data.pca_2, color=data.color,
-             marker='.', alpha=0.6)
-    plt.plot(cluster_center[0], cluster_center[1], 
-         '*', markerfacecolor=col, markersize=15)
+#for k, col in zip(range(k_means_labels_unique.argmax() + 1), color):
+#    my_members = k_means_labels == k
+#    cluster_center = k_means_cluster_centers[k]
+#    plt.scatter(data.pca_1, data.pca_2, color=data.color,
+#             marker='.', alpha=0.6)
+#    plt.plot(cluster_center[0], cluster_center[1], 
+#         '*', markerfacecolor=col, markersize=15)
+
+print("Silhouette Coefficient: %0.3f"
+      % metrics.silhouette_score(X_pca, labels))
+
+         
+colors = plt.cm.Spectral(np.linspace(0, 1, len(unique_labels)))
+for k, col in zip(unique_labels, colors):
+    if k == -1:
+        # Black used for noise.
+        col = 'k'
+    class_member_mask = (labels == k)    
+    xy= X_pca[class_member_mask & core_samples_mask]
+    plt.plot(xy[:, 0], xy[:, 1], xy, 'o', markerfacecolor=col,
+             markeredgecolor='k', markersize=14)
+    xy = X_pca[class_member_mask & ~core_samples_mask]
+    plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,
+             markeredgecolor='k', markersize=6, alpha=0.3)
+plt.title('Estimated number of clusters: %d' % n_clusters_)
+plt.show()
                      
-plt.title('%d types de store' % k_means.n_clusters)
+#plt.title('%d types de store' % k_means.n_clusters)
 plt.xlabel('First PCA direction')
 plt.ylabel('Seconde PCA direction')
 
-data[['Store', 'cluster']].to_csv("cluster_kmean.csv", index=False)
+data[['Store', 'cluster']].to_csv("cluster_DBCAN.csv", index=False)
 
 
 
