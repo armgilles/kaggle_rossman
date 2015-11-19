@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 import matplotlib
 matplotlib.use("Agg") #Needed to save figures
 import matplotlib.pyplot as plt
@@ -88,15 +89,22 @@ customers_store = train.groupby('Store')['Customers'].agg({'mean' : np.mean,
 
  
 
-print "PCA cacul" 
+print("Create features with Customers")
 store_enrich = store.merge(customers_store, on='Store')
+
+print("Standardization")
+sc = StandardScaler()
+data_sc = sc.fit_transform(store_enrich)
+store_enrich_sc = pd.DataFrame(data_sc, columns=store_enrich.columns)
+
+print "PCA cacul" 
 #X_pca, pca = clustering(store, 2)
-X_pca, pca = clustering(store_enrich, 2)
+X_pca, pca = clustering(store_enrich_sc, 6)
 #plt.scatter(X_pca[:, 0], X_pca[:, 1], marker="o", alpha=0.4)
 
 
 print "Kmean"
-k_means = KMeans(init='k-means++', n_clusters=4, n_init=10).fit(X_pca)
+k_means = KMeans(init='k-means++', n_clusters=6, n_init=10).fit(X_pca)
 
 k_means_labels = k_means.labels_
 k_means_cluster_centers = k_means.cluster_centers_
@@ -108,10 +116,20 @@ data = pd.DataFrame({'pca_1' : X_pca[:,0],
                      'Store' : pd.Series(store_enrich.Store)})
                      
 
-dico_color = {0: '#7fff00',
-              1: '#ff00ff',
-              2: '#ff8c00',
-              3: '#00bfff'}
+dico_color = {0: '#8b0000',
+              1: '#d84765',
+              2: '#fea0ac',
+              3: '#ffffe0',
+              4: '#9edba4',
+              5: '#5aaf8c',
+              6: '#008080',
+#              7: '#c7f0ba',
+#              8: '#9edba4',
+#              9: '#7ac696',
+#              10: '#5aaf8c',
+#              11: '#399785',
+#              12: '#008080'
+              }
               
 
 center_color = [col for col in dico_color.values()]
@@ -126,7 +144,7 @@ for k, col in zip(range(k_means_labels_unique.argmax() + 1), color):
     plt.scatter(data.pca_1, data.pca_2, color=data.color,
              marker='.', alpha=0.6)
     plt.plot(cluster_center[0], cluster_center[1], 
-         'p', markerfacecolor=col, markersize=8)
+         '*', markerfacecolor=col, markersize=15)
                      
 plt.title('%d types de store' % k_means.n_clusters)
 plt.xlabel('First PCA direction')
