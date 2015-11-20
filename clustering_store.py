@@ -105,7 +105,7 @@ X_pca, pca = clustering(store_enrich_sc, 6)
 
 
 print "DBSCAN"
-db = DBSCAN(eps=0.9, min_samples=10, metric='euclidean').fit(X_pca)
+db = DBSCAN(eps=2, min_samples=100, metric='euclidean').fit(X_pca)
 
 core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
 core_samples_mask[db.core_sample_indices_] = True
@@ -162,7 +162,7 @@ for k, col in zip(unique_labels, colors):
     class_member_mask = (labels == k)    
     xy= X_pca[class_member_mask & core_samples_mask]
     plt.plot(xy[:, 0], xy[:, 1], xy, 'o', markerfacecolor=col,
-             markeredgecolor='k', markersize=14)
+             markeredgecolor='k', markersize=14, alpha=0.4)
     xy = X_pca[class_member_mask & ~core_samples_mask]
     plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,
              markeredgecolor='k', markersize=6, alpha=0.3)
