@@ -135,14 +135,14 @@ print('training data processed')
 
 params = {"objective": "reg:linear",
           "booster" : "gbtree",
-          "eta": 0.09,
+          "eta": 0.05,
           "max_depth": 10,
-          "subsample": 0.9,
-          "colsample_bytree": 0.7,
+          "subsample": 0.85,
+          "colsample_bytree": 0.8,
           "silent": 1,
           "seed": 1301
           }
-num_boost_round = 1700
+num_boost_round = 3000
 
 print("Train a XGBoost model")
 X_train, X_valid = train_test_split(train, test_size=0.15, random_state=10)
@@ -165,7 +165,7 @@ dtest = xgb.DMatrix(test[features])
 test_probs = gbm.predict(dtest)
 # Make Submission
 result = pd.DataFrame({"Id": test["Id"], 'Sales': np.expm1(test_probs)})
-result.to_csv("submission_7.csv", index=False)
+result.to_csv("submission_11.csv", index=False)
 
 # XGB feature importances
 # Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection-prediction/xgb-feature-importance-python/code
